@@ -72,6 +72,10 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [users, setUsers] = useState([]);
   const [typingUser, setTypingUser] = useState([])
+  const [mode, setMode] = useState('init');       // init | joining | chatting
+  const [roomCode, setRoomCode] = useState('');
+  const [joinInput, setJoinInput] = useState('');
+  const [error, setError] = useState('');
   const messagesEndRef = useRef(null);
 
   // 1) Mesaj geldiğinde aşağı kaydır
@@ -89,6 +93,19 @@ export default function App() {
         }
         return [...prev, { ...msg, delivered: true }];
       });
+    });
+
+    socket.on('roomCreated', code => {
+      setRoomCode(code);
+      setMode('chatting');
+      setUsers([username]);
+      setError('');
+    });
+    // odaya başarılı katılma
+    socket.on('roomJoined', code => {
+      setRoomCode(code);
+      setMode('chatting');
+      setError('');
     });
 
 
@@ -133,7 +150,7 @@ export default function App() {
     if (username.trim()) {
       if (msg.trim() == "") {
         typeEnd()
-      }else{
+      } else {
         socket.emit('typingStart1', username)
       }
     }
@@ -144,7 +161,20 @@ export default function App() {
       socket.emit('typingStop', username)
     }
   }
+  const createRoom = () => {
+    if (!username.trim()) return setError('Ad gir!');
+    socket.emit('createRoom', username);
+  };
+  const startJoin = () => {
+    if (!username.trim()) return setError('Ad gir!');
+    setMode('joining');
+    setError('');
+  };
+  const joinRoom = () => {
+    if (!joinInput.trim()) return setError('Kod gir!');
+    socket.emit('joinRoom', { username, roomCode: joinInput.trim() });
 
+  };
   const sendMessage = () => {
     if (!message.trim()) return;
     const msgObj = {
@@ -160,18 +190,33 @@ export default function App() {
     setMessage('');
   };
 
-  if (!joined) {
+  if (mode === 'init') {
     return (
-      <div className="join-container">
+      <div className="init-screen">
+        <h2>Adın?</h2>
         <input
-          className="join-input"
-          placeholder="Kullanıcı adın"
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <button className="join-button" onClick={joinChat}>
-          Sohbete Katıl
-        </button>
+          onChange={e => setUsername(e.target.value)}
+          placeholder="Bir isim gir" />
+        <div>
+          <button onClick={createRoom}>Create Room</button>
+          <button onClick={startJoin}>Join Room</button>
+        </div>
+        {error && <p className="error">{error}</p>}
+      </div>
+    );
+  }
+
+  if (mode === 'joining') {
+    return (
+      <div className="join-screen">
+        <h2>Oda Kodu:</h2>
+        <input
+          value={joinInput}
+          onChange={e => setJoinInput(e.target.value)}
+          placeholder="Örn: ABC123" />
+        <button onClick={joinRoom}>Join</button>
+        {error && <p className="error">{error}</p>}
       </div>
     );
   }
@@ -185,7 +230,7 @@ export default function App() {
 
             <div className="card" id="chat2">
               <div className="card-header p-3">
-                <h5 className="mb-0">ChatRoom</h5>
+                <h5 className="mb-0">ChatRoom (Room {roomCode}) </h5>
                 <div>
                   Aktif Kullanıcılar: <strong>Sen ({username})</strong>{users.length > 0 && ", "}
                   {users.map((u, i) => (
@@ -235,9 +280,9 @@ export default function App() {
 
               </div>
               <div className="card-footer text-muted d-flex justify-content-start align-items-center p-3">
-                <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
+                <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className='w-100'>
 
-                  <input type="text" className="form-control form-control-lg" id="exampleFormControlInput1"
+                  <input type="text" className="form-control form-control-lg w-100" id="exampleFormControlInput1"
                     placeholder="Type message" value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyUp={e => type(e.target.value)} />
