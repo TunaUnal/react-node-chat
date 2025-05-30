@@ -98,9 +98,9 @@ export default function App() {
     socket.on('roomCreated', code => {
       setRoomCode(code);
       setMode('chatting');
-      setUsers([username]);
       setError('');
     });
+
     // odaya başarılı katılma
     socket.on('roomJoined', code => {
       setRoomCode(code);
@@ -108,18 +108,9 @@ export default function App() {
       setError('');
     });
 
-
-    socket.on('userLogin', (newUsername) => {
-      setUsers((prev) => {
-        if (prev.includes(newUsername)) return prev;  // Aynı kullanıcı tekrar eklenmesin
-        return [...prev, newUsername];
-      });
-    });
-
-    socket.on('userLogout', (leftUser) => {
-      setUsers((prev) => prev.filter((u) => u.username !== leftUser.username));
-    });
-
+    socket.on('userJoined', room => {
+      setUsers(room.usernames);
+    })
 
     socket.on('typingStart', (typingUser) => {
       setTypingUser((user) => {
@@ -181,7 +172,8 @@ export default function App() {
       id: `${Date.now()}_${Math.random()}`,
       user: username,
       text: message,
-      delivered: false
+      delivered: false,
+      room:roomCode
     };
     // Optimistic UI
     setMessages((prev) => [...prev, msgObj]);

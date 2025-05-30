@@ -15,7 +15,7 @@ const io = new Server(server, {
 
 const rooms = {};
 
-function genCode(len = 6) {
+function genCode(len = 4) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let s = '';
   while (s.length < len) s += chars[Math.floor(Math.random() * chars.length)];
@@ -25,16 +25,13 @@ function genCode(len = 6) {
 io.on('connection', (socket) => {
   console.log('Bir kullanıcı bağlandı:', socket.id);
 
-  socket.on('join', (username) => {
-    socket.username = username;
-    socket.broadcast.emit('userLogin', {
-      username: username
-    });
+  socket.on('sendMessage', msg => {
+    const rc = msg.room;
+    console.log(rc)
+    if (!rc) return;
+    io.to(rc).emit('message', msg);
   });
 
-  socket.on('sendMessage', (message) => {
-    io.emit('message', message);
-  });
 
   socket.on('typingStart1', (username) => {
     socket.broadcast.emit('typingStart', username)
@@ -46,7 +43,7 @@ io.on('connection', (socket) => {
 
   socket.on('createRoom', username => {
     const code = genCode();
-    rooms[code] = { players: [socket.id], usernames: { [socket.id]: username } };
+    rooms[code] = { players: [socket.id], usernames: [{ id: socket.id, username: username }] };
     socket.join(code);
     socket.emit('roomCreated', code);
     console.log(`🔨 Room ${code} created by ${username}`);
@@ -62,12 +59,13 @@ io.on('connection', (socket) => {
       return socket.emit('err', 'Oda dolu.');
     }
     room.players.push(socket.id);
-    room.usernames[socket.id] = username;
+    room.usernames.push({id:socket.id,username:username})
     socket.join(roomCode);
     socket.emit('roomJoined', roomCode);
     // diğerine bildir
-    socket.to(roomCode).emit('userJoined', username);
+    io.to(roomCode).emit('userJoined', room);
     console.log(`🚪 ${username} joined room ${roomCode}`);
+    console.log(`🚪 ${username} joined room ${room}`);
   });
 
 
