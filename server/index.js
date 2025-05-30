@@ -32,15 +32,6 @@ io.on('connection', (socket) => {
     io.to(rc).emit('message', msg);
   });
 
-
-  /*socket.on('typingStart1', ({username, room}) => {
-    io.to(room).emit('typingStart', username)
-  })
-
-  socket.on('typingStop', (username) => {
-    socket.broadcast.emit('typingStop', username)
-  })*/
-
   socket.on('createRoom', username => {
     socket.username = username;
     const code = genCode();
@@ -96,9 +87,6 @@ io.on('connection', (socket) => {
         io.to(socket.userRoom).emit('someoneLeaved', room);
         console.log(`${socket.username} ayrılıyor, broadcast yapıyorum.`);
         socket.broadcast.emit('userLogout', { username: socket.username });
-
-        
-        // Bu satıra mutlaka gelmeli
       }
     }
   });
