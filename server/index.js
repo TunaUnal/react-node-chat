@@ -13,7 +13,7 @@ const io = new Server(server, {
   }
 });
 
-const rooms = {};
+const rooms = [];
 
 function genCode(len = 4) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -27,56 +27,79 @@ io.on('connection', (socket) => {
 
   socket.on('sendMessage', msg => {
     const rc = msg.room;
-    console.log(rc)
+    console.log(rc + " odasına " + msg.username + " tarafından mesaj geldi")
     if (!rc) return;
     io.to(rc).emit('message', msg);
   });
 
 
-  socket.on('typingStart1', (username) => {
-    socket.broadcast.emit('typingStart', username)
+  /*socket.on('typingStart1', ({username, room}) => {
+    io.to(room).emit('typingStart', username)
   })
 
   socket.on('typingStop', (username) => {
     socket.broadcast.emit('typingStop', username)
-  })
+  })*/
 
   socket.on('createRoom', username => {
+    socket.username = username;
     const code = genCode();
-    rooms[code] = { players: [socket.id], usernames: [{ id: socket.id, username: username }] };
-    socket.join(code);
-    socket.emit('roomCreated', code);
+    rooms.push({ id: code, users: [{ id: socket.id, username: username }] });
+    socket.join(code); // Odayı oluşturan kullanıcıyı kurduğu odaya dahil ettik.
+    socket.userRoom = code;
+    const room = rooms.find(room => room.id == code)
+    socket.emit('roomCreated', room);
     console.log(`🔨 Room ${code} created by ${username}`);
   });
 
-  // —— 2) ODAYA KATILMA ——
   socket.on('joinRoom', ({ username, roomCode }) => {
-    const room = rooms[roomCode];
+    socket.username = username;
+    const room = rooms.find(room => room.id == roomCode)
     if (!room) {
       return socket.emit('err', 'Oda bulunamadı.');
     }
-    if (room.players.length >= 2) {
+    if (room.users.length >= 2) {
       return socket.emit('err', 'Oda dolu.');
     }
-    room.players.push(socket.id);
-    room.usernames.push({id:socket.id,username:username})
-    socket.join(roomCode);
-    socket.emit('roomJoined', roomCode);
+
+
+    room.users.push({ id: socket.id, username: username }) // Kullanıcıyı room değişkenine ekledik
+    socket.join(roomCode); // Kullanıcıyı odaya dahil ettik
+    socket.userRoom = roomCode;
+
+    socket.emit('roomJoined', room);
     // diğerine bildir
-    io.to(roomCode).emit('userJoined', room);
+    io.to(roomCode).emit('someoneJoined', room);
+
+
     console.log(`🚪 ${username} joined room ${roomCode}`);
-    console.log(`🚪 ${username} joined room ${room}`);
   });
 
 
 
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    console.log(`❌ Disconnect tetiklendi! socket.id=${socket.id}`, 'Sebep:', reason);
+    console.log('Socket.username:', socket.username, " odası : " + socket.userRoom);
     if (socket.username) {
-      console.log(socket.username + " ayrıldı")
-      socket.broadcast.emit('userLogout', {
-        username: socket.username,
-      });
+      const roomCode = socket.userRoom;
+      if (!roomCode) return;
+      const idx = rooms.findIndex(room => room.id == socket.userRoom)
+      if (idx == -1) return;
+
+      const room = rooms[idx];
+      room.users = room.users.filter(u => u.username !== socket.username)
+
+      if (room.users.length === 0) {
+        rooms.splice(idx, 1);
+      }else{
+        io.to(socket.userRoom).emit('someoneLeaved', room);
+        console.log(`${socket.username} ayrılıyor, broadcast yapıyorum.`);
+        socket.broadcast.emit('userLogout', { username: socket.username });
+
+        
+        // Bu satıra mutlaka gelmeli
+      }
     }
   });
 });

@@ -67,13 +67,12 @@ function ChatInput({ message, setMessage, sendMessage }) {
 // Ana sohbet uygulaması bileşeni
 export default function App() {
   const [username, setUsername] = useState('');
-  const [joined, setJoined] = useState(false);
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [users, setUsers] = useState([]);
   const [typingUser, setTypingUser] = useState([])
   const [mode, setMode] = useState('init');       // init | joining | chatting
-  const [roomCode, setRoomCode] = useState('');
+  const [room, setRoom] = useState('');
   const [joinInput, setJoinInput] = useState('');
   const [error, setError] = useState('');
   const messagesEndRef = useRef(null);
@@ -83,6 +82,7 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
   useEffect(() => {
+
     socket.on('message', (msg) => {
       setMessages((prev) => {
         const exists = prev.find((m) => m.id === msg.id);
@@ -95,26 +95,34 @@ export default function App() {
       });
     });
 
-    socket.on('roomCreated', code => {
-      setRoomCode(code);
+
+    socket.on('roomCreated', getRoom => {
+      console.log("Sunucudan haber geldi. Oda oluşturuldu.");
+      setRoom(getRoom);
+      setMode('chatting');
+      setError('');
+    });
+    
+    socket.on('roomJoined', getRoom => {
+      console.log("Sunucudan haber geldi. Odaya katıldık. Room : ");
+      console.log(getRoom);
+      
+      setRoom(getRoom);
       setMode('chatting');
       setError('');
     });
 
-    // odaya başarılı katılma
-    socket.on('roomJoined', code => {
-      setRoomCode(code);
-      setMode('chatting');
-      setError('');
-    });
+    socket.on('someoneJoined', getRoom => {
+      setRoom(getRoom);
+    })
 
-    socket.on('userJoined', room => {
-      setUsers(room.usernames);
+    socket.on('someoneLeaved', getRoom => {
+      setRoom(getRoom);
     })
 
     socket.on('typingStart', (typingUser) => {
       setTypingUser((user) => {
-        if (user.includes(typingUser)) return user;  // Aynı kullanıcı tekrar eklenmesin
+        if (user.includes(typingUser)) return user;
         return [...user, typingUser];
       });
     });
@@ -130,19 +138,13 @@ export default function App() {
     };
   }, []);
 
-  const joinChat = () => {
-    if (username.trim()) {
-      socket.emit('join', username);
-      setJoined(true);
-    }
-  };
-
+  /*
   const type = (msg) => {
     if (username.trim()) {
       if (msg.trim() == "") {
         typeEnd()
       } else {
-        socket.emit('typingStart1', username)
+        socket.emit('typingStart1', {username, roomCode})
       }
     }
   }
@@ -152,6 +154,9 @@ export default function App() {
       socket.emit('typingStop', username)
     }
   }
+*/
+
+
   const createRoom = () => {
     if (!username.trim()) return setError('Ad gir!');
     socket.emit('createRoom', username);
@@ -173,12 +178,14 @@ export default function App() {
       user: username,
       text: message,
       delivered: false,
-      room:roomCode
+      room:room.id,
+      type:"msg"
     };
-    // Optimistic UI
+
     setMessages((prev) => [...prev, msgObj]);
+    
     socket.emit('sendMessage', msgObj);
-    typeEnd();
+    //typeEnd();
     setMessage('');
   };
 
@@ -222,11 +229,11 @@ export default function App() {
 
             <div className="card" id="chat2">
               <div className="card-header p-3">
-                <h5 className="mb-0">ChatRoom (Room {roomCode}) </h5>
+                <h5 className="mb-0">ChatRoom (Room {room.id}) </h5>
                 <div>
-                  Aktif Kullanıcılar: <strong>Sen ({username})</strong>{users.length > 0 && ", "}
-                  {users.map((u, i) => (
-                    <span key={i}>{u.username}{i < users.length - 1 ? ', ' : ''}</span>
+                  Aktif Kullanıcılar: <strong>Sen ({username})</strong>{room.users.length > 0 && ", "}
+                  {room.users.filter(usr=>usr.username !== username).map((u, i) => (
+                    <span key={i}>{u.username}{i < room.users.length - 2 ? ', ' : ''}</span>
                   ))}
                 </div>
               </div>
@@ -234,7 +241,6 @@ export default function App() {
 
                 {messages.map((msg) => (
 
-                  <>
                     <div key={msg.id} className={`d-flex flex-row justify-content-${msg.user == username ? "end" : "start"}`}>
                       <div>
                         <p className={`small p-2 mb-1 rounded-3 ${msg.user == username ? "text-white  bg-primary" : "bg-body-tertiary"}  `}>
@@ -248,7 +254,6 @@ export default function App() {
                       </div>
                     </div>
 
-                  </>
                 ))}
 
                 {typingUser.length > 0 && (
@@ -260,6 +265,8 @@ export default function App() {
                     ))} yazıyor...
                   </p>
                 )}
+
+
                 <div ref={messagesEndRef} />
 
 
@@ -272,12 +279,13 @@ export default function App() {
 
               </div>
               <div className="card-footer text-muted d-flex justify-content-start align-items-center p-3">
-                <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className='w-100'>
+                <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} autoComplete="off"   className='w-100'>
 
                   <input type="text" className="form-control form-control-lg w-100" id="exampleFormControlInput1"
                     placeholder="Type message" value={message}
+                    autoComplete="off"  
                     onChange={(e) => setMessage(e.target.value)}
-                    onKeyUp={e => type(e.target.value)} />
+                    /*onKeyUp={e => type(e.target.value)}*/ />
                 </form>
                 <a className="ms-1 text-muted" href="#!"><i className="fas fa-paperclip"></i></a>
                 <a className="ms-3 text-muted" href="#!"><i className="fas fa-smile"></i></a>
